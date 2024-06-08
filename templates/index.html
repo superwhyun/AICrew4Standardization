@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrewAI Interaction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button:hover:enabled {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .result h3 {
+            margin-top: 0;
+        }
+        .result p {
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        .final-agreement {
+            background-color: #e6ffe6;
+            border-color: #33cc33;
+        }
+        .spinner {
+            margin: 20px auto;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #007BFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .image-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="image-container">
+        <img src="{{ url_for('static', filename='image.png') }}" alt="CrewAI Image">
+    </div>
+    <h1>CrewAI Interaction</h1>
+    <form id="interaction-form">
+        <label for="topic">Topic:</label>
+        <input type="text" id="topic" name="topic" value="메타버스 플랫폼간 연동 상세 기능 구조 및 요구사항" required>
+        
+        <label for="max_iterations">Max Iterations:</label>
+        <input type="number" id="max_iterations" name="max_iterations" value="2" required>
+        
+        <label for="proposer_backstory">Proposer Backstory:</label>
+        <textarea id="proposer_backstory" name="proposer_backstory" rows="4" required>
+귀하는 미래 표준에 대한 비전을 가진 해당 분야의 전문가입니다. 여러분의 역할은 새로운 표준화 항목을 제안하는 것입니다. 200자 이내로 답변해.
+        </textarea>
+        
+        <label for="opposer_backstory">Opposer Backstory:</label>
+        <textarea id="opposer_backstory" name="opposer_backstory" rows="4" required>
+여러분은 비판적 사고의 소유자입니다. 여러분의 역할은 새로운 제안을 면밀히 검토하고 채택 전에 높은 기준을 충족하는지 확인하는 것입니다. 충분히 설득되지 않는다면 제안에 동의하지 않습니다. 200자 이내로 답변해.
+        </textarea>
+        
+        <button type="submit" id="submit-button">Submit</button>
+    </form>
+    <h2>Results</h2>
+    <div id="results"></div>
+    <div class="spinner" id="spinner"></div>
+
+    <script>
+        const socket = io();
+        document.getElementById('interaction-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const topic = document.getElementById('topic').value;
+            const maxIterations = document.getElementById('max_iterations').value;
+            const proposerBackstory = document.getElementById('proposer_backstory').value.trim();
+            const opposerBackstory = document.getElementById('opposer_backstory').value.trim();
+            const submitButton = document.getElementById('submit-button');
+            const spinner = document.getElementById('spinner');
+            const resultsDiv = document.getElementById('results');
+
+            // Disable the submit button and show the spinner
+            submitButton.disabled = true;
+            spinner.style.display = 'block';
+
+            // Clear previous results
+            resultsDiv.innerHTML = '';
+
+            socket.emit('start_interaction', {
+                topic,
+                max_iterations: maxIterations,
+                proposer_backstory: proposerBackstory,
+                opposer_backstory: opposerBackstory
+            });
+
+            socket.on('response', function(data) {
+                const md = window.markdownit();
+                const resultItem = document.createElement('div');
+                resultItem.classList.add('result');
+                
+                const title = document.createElement('h3');
+                if (data.role === 'Proposer') {
+                    title.textContent = `Iteration ${data.iteration}: Proposer`;
+                } else if (data.role === 'Opposer') {
+                    title.textContent = `Iteration ${data.iteration}: Opposer`;
+                } else if (data.role === 'Final') {
+                    resultItem.classList.add('final-agreement');
+                    title.textContent = data.response.includes('Agreement reached') ? "Final Agreement" : "Final Disagreement";
+                }
+                resultItem.appendChild(title);
+                
+                const content = document.createElement('div');
+                content.innerHTML = md.render(data.response);
+                resultItem.appendChild(content);
+
+                resultsDiv.appendChild(resultItem);
+
+                // Re-enable the submit button and hide the spinner after final agreement or disagreement
+                if (data.role === 'Final') {
+                    submitButton.disabled = false;
+                    spinner.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
