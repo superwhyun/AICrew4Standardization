@@ -25,3 +25,4 @@ jobs:
     - name: Push Docker image
       run: |
         docker push superwhyun/standards-crewai:$(date +%s)
+
